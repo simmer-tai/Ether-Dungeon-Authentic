@@ -44,7 +44,7 @@ export class Statue extends Entity {
             ctx.fillStyle = 'white';
             ctx.font = '16px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Press [SPACE] to Pray', this.x + this.width / 2, this.y - 10);
+            ctx.fillText('[SPACE] 祈る', this.x + this.width / 2, this.y - 10);
         }
     }
 

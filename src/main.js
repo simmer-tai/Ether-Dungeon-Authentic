@@ -1,4 +1,4 @@
-import { InputHandler, Camera, Entity } from './utils.js';
+import { InputHandler, Camera, Entity, getCachedImage } from './utils.js';
 import { Map } from './map.js';
 import { Player } from './player.js';
 import { Enemy, Slime, Bat, Goblin, SkeletonArcher, Chest, Statue, BloodAltar, ShopNPC, WoodCrate, SpikeTrap } from './entities.js';
@@ -28,7 +28,7 @@ class Game {
         this.height = this.canvas.height;
         this.zoom = 1.2;
         this.debugMode = false;
-        this.gameState = 'PLAYING'; // PLAYING, REWARD_SELECT, GAME_OVER
+        this.gameState = 'TITLE'; // TITLE, PLAYING, REWARD_SELECT, GAME_OVER
         this.rewardOptions = null; // Array of 3 options
         this.images = {}; // Asset Check
         this.currentFloor = 1;
@@ -57,7 +57,9 @@ class Game {
         });
 
         try {
-            this.init();
+            // Initial setup but don't spawn player yet
+            // (Unless we want title screen to show the map in background)
+            this.prepareTitleScreen();
         } catch (e) {
             _debugLog("Init Error: " + e.message);
             console.error(e);
@@ -80,6 +82,8 @@ class Game {
         // Responsive Resizing
         window.addEventListener('resize', () => this.handleResize());
         this.handleResize(); // Initial call
+
+        this.initTitleListeners();
 
         requestAnimationFrame(this.loop);
         _debugLog("Game Loop Started");
@@ -121,6 +125,169 @@ class Game {
         }
 
         console.log(`Resized to fit 16:9: ${this.width.toFixed(0)}x${this.height.toFixed(0)}, Zoom: ${this.zoom.toFixed(2)}`);
+    }
+
+    prepareTitleScreen() {
+        // Hide UI Layer during title
+        const uiLayer = document.getElementById('ui-layer');
+        if (uiLayer) {
+            uiLayer.style.display = 'none';
+        }
+    }
+
+    initTitleListeners() {
+        const startBtn = document.getElementById('btn-start-game');
+        if (startBtn) {
+            startBtn.onclick = () => this.startGame();
+        }
+    }
+
+    showLoading() {
+        const screen = document.getElementById('loading-screen');
+        const fill = document.querySelector('.loading-bar-fill');
+        if (screen) {
+            screen.style.display = 'flex';
+            if (fill) fill.style.width = '0%';
+        }
+    }
+
+    updateLoadingProgress(progress) {
+        const fill = document.querySelector('.loading-bar-fill');
+        if (fill) {
+            fill.style.width = `${progress}%`;
+        }
+    }
+
+    hideLoading() {
+        const screen = document.getElementById('loading-screen');
+        const fill = document.querySelector('.loading-bar-fill');
+        if (fill) fill.style.width = '100%';
+
+        setTimeout(() => {
+            if (screen) {
+                screen.style.animation = 'fadeOutTitle 0.3s forwards';
+                setTimeout(() => {
+                    screen.style.display = 'none';
+                    screen.style.animation = '';
+                }, 300);
+            }
+        }, 300);
+    }
+
+    async preloadAllAssets() {
+        console.log("Preloading started...");
+        const assets = [
+            'assets/player_sprites.png',
+            'assets/floor.png',
+            'assets/portal_stairs.png',
+            'assets/aether_shard.png',
+            'assets/chest_closed.png',
+            'assets/chest_open.png',
+            'assets/bg_angel_blessing.png',
+            'assets/bg_blood_blessing.png',
+            'assets/slime.png',
+            'assets/bat.png',
+            'assets/goblin.png',
+            'assets/skeleton_archer.png',
+            'assets/icon_bleed.png',
+            'assets/icon_ice.png',
+            'assets/icon_burn.png',
+            'assets/icon_crimson_cross.png',
+            'assets/icon_dash.png',
+            'assets/flame_fan.png',
+            'assets/icon_flame_fan.png',
+            'assets/icon_slash.png',
+            'assets/icon_blood_scythe.png',
+            'assets/ice_spike.png',
+            'assets/icon_needle.png',
+            'assets/icon_fireball.png',
+            'assets/fireball_sheet.png',
+            'assets/icon_thunder_burst.png',
+            'assets/thunder_burst.png',
+            'assets/icon_bounce.png',
+            'assets/icon_ember_strike.png',
+            'assets/blood_scythe.png',
+            'assets/icon_ice_spike.png',
+            'assets/icon_ice_garden.png',
+            'assets/icon_wind.png',
+            'assets/icon_chain.png',
+            'assets/icon_thunder_fall.png',
+            'assets/icon_thunder_god.png',
+            'assets/icon_glacial_lotus.png',
+            'assets/phoenix_aura.png',
+            'assets/icon_magma_spear.png',
+            'assets/magma_spear.png',
+            'assets/magma_core.png',
+            'assets/tornado.png',
+            'assets/trap_spike.png',
+            'assets/wood_crate.png',
+            'assets/shop_npc.png',
+            'assets/statue_angel.png',
+            'assets/blood_altar.png'
+        ];
+
+        // Also add any icons/spriteSheets from skillsDB that aren't manually listed
+        skillsDB.forEach(s => {
+            if (s.icon && !assets.includes(s.icon)) assets.push(s.icon);
+            if (s.params?.spriteSheet && !assets.includes(s.params.spriteSheet)) assets.push(s.params.spriteSheet);
+        });
+
+        let loadedCount = 0;
+        const total = assets.length;
+
+        const promises = assets.map(src => {
+            return new Promise((resolve) => {
+                const img = getCachedImage(src);
+                if (img.complete && img.naturalWidth !== 0) {
+                    loadedCount++;
+                    this.updateLoadingProgress((loadedCount / total) * 100);
+                    resolve();
+                } else {
+                    img.onload = () => {
+                        loadedCount++;
+                        this.updateLoadingProgress((loadedCount / total) * 100);
+                        resolve();
+                    };
+                    img.onerror = () => {
+                        console.error("Asset preload failed:", src);
+                        loadedCount++; // Still resolve to avoid hanging
+                        resolve();
+                    };
+                }
+            });
+        });
+
+        await Promise.all(promises);
+        console.log("Preloading complete.");
+    }
+
+    startGame() {
+        const titleScreen = document.getElementById('title-screen');
+        if (titleScreen) {
+            titleScreen.style.animation = 'fadeOutTitle 0.5s forwards';
+            setTimeout(async () => {
+                titleScreen.style.display = 'none';
+
+                this.showLoading();
+
+                // 1. Preload Assets
+                await this.preloadAllAssets();
+
+                // 2. Initialize Map (Heavy work)
+                // Small delay to ensure the progress bar hit 100% and rendered before blocking
+                setTimeout(() => {
+                    // Show core game UI
+                    const uiLayer = document.getElementById('ui-layer');
+                    if (uiLayer) uiLayer.style.display = 'block';
+
+                    // Initialize game session
+                    this.init();
+
+                    this.gameState = 'PLAYING';
+                    this.hideLoading();
+                }, 100);
+            }, 500);
+        }
     }
 
 
@@ -179,7 +346,7 @@ class Game {
             skillsDB.forEach(skillData => {
                 const skill = createSkill(skillData);
                 if (skill) {
-                    this.player.inventory.push(skill);
+                    this.player.acquireSkill(skill);
                     // Auto equip for now based on type (simple logic)
                     if (!this.player.equippedSkills[skill.type]) {
                         this.player.equipSkill(skill);
@@ -352,17 +519,20 @@ class Game {
         }
     }
 
-    spawnParticles(x, y, count, color, baseVx = 0, baseVy = 0) {
+    spawnParticles(x, y, count, color, baseVx = 0, baseVy = 0, options = {}) {
         for (let i = 0; i < count; i++) {
             this.animations.push({
                 type: 'particle',
                 x: x, y: y,
-                w: 4, h: 4,
+                w: options.size || 4,
+                h: options.size || 4,
                 life: 0.3 + Math.random() * 0.2,
                 maxLife: 0.5,
                 color: color,
                 vx: baseVx + (Math.random() - 0.5) * 200,
-                vy: baseVy + (Math.random() - 0.5) * 200
+                vy: baseVy + (Math.random() - 0.5) * 200,
+                shape: options.shape || 'square',
+                shrink: options.shrink || false
             });
         }
     }
@@ -389,8 +559,13 @@ class Game {
                 const skill = m.createSkill(skillData);
 
                 if (skill) {
-                    p.inventory.push(skill);
-                    _debugLog(`祝福: ${skill.name} を習得!`);
+                    const success = p.acquireSkill(skill);
+                    if (success) {
+                        _debugLog(`祝福: ${skill.name} を習得!`);
+                    } else {
+                        _debugLog(`祝福: ${skill.name} は既に持っています! (シャード+20)`);
+                        p.addCurrency(20); // Small compensation for duplicate
+                    }
                 }
             });
         } else if (opt.id.startsWith('skill_')) {
@@ -398,8 +573,12 @@ class Game {
             import('./skills/index.js').then(m => {
                 const skill = m.createSkill(opt.data);
                 if (skill) {
-                    p.inventory.push(skill);
-                    _debugLog(`Blessing: Acquired ${skill.name}!`);
+                    const success = p.acquireSkill(skill);
+                    if (success) {
+                        _debugLog(`Blessing: Acquired ${skill.name}!`);
+                    } else {
+                        _debugLog(`Blessing: Already possess ${skill.name}!`);
+                    }
                 }
             });
         }
@@ -523,17 +702,25 @@ class Game {
     }
 
     update(dt) {
+        if (this.gameState === 'TITLE') return;
         // --- Transition Logic ---
         if (this.isTransitioning) {
             this.transitionTimer += dt;
             if (this.transitionType === 'fade-out') {
                 this.transitionAlpha = Math.min(1, this.transitionTimer / this.transitionDuration);
                 if (this.transitionTimer >= this.transitionDuration) {
-                    // Fade Out Complete -> Next Level
-                    this.init(true);
-                    this.transitionType = 'fade-in';
-                    this.transitionTimer = 0;
-                    this.transitionAlpha = 1;
+                    // Prevent multiple calls to this block while timer continues to tick
+                    this.transitionType = 'loading-next-floor';
+                    this.showLoading();
+
+                    setTimeout(async () => {
+                        await this.preloadAllAssets();
+                        this.init(true);
+                        this.transitionType = 'fade-in';
+                        this.transitionTimer = 0;
+                        this.transitionAlpha = 1;
+                        this.hideLoading();
+                    }, 100);
                 }
             } else if (this.transitionType === 'entering-portal') {
                 const duration = 0.4; // Total sequence duration
@@ -646,7 +833,11 @@ class Game {
 
         if (this.isGameOver) {
             if (this.input.isDown('Space')) {
-                this.init();
+                this.showLoading();
+                setTimeout(() => {
+                    this.init();
+                    this.hideLoading();
+                }, 100);
             }
             return;
         }
@@ -1229,6 +1420,12 @@ class Game {
     }
 
     draw() {
+        if (this.gameState === 'TITLE') {
+            // Draw title background or just clear
+            this.ctx.fillStyle = '#0d0d0d';
+            this.ctx.fillRect(0, 0, this.width, this.height);
+            return;
+        }
         // Clear screen
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.width, this.height);
@@ -1239,6 +1436,13 @@ class Game {
         this.ctx.translate(-Math.floor(this.camera.x), -Math.floor(this.camera.y));
 
         this.map.draw(this.ctx, this.camera, this.player, this.debugMode);
+
+        // Draw Traps (Floor layer)
+        this.traps.forEach(trap => {
+            if (this.camera.isVisible(trap.x, trap.y, trap.width, trap.height)) {
+                trap.draw(this.ctx);
+            }
+        });
 
         // Draw 'bottom' layer animations (Background effects like Ice Garden AND Ghosts)
         this.animations.forEach(a => {
@@ -1259,13 +1463,6 @@ class Game {
             }
         });
 
-        // Draw Traps (Floor layer)
-        this.traps.forEach(trap => {
-            if (this.camera.isVisible(trap.x, trap.y, trap.width, trap.height)) {
-                trap.draw(this.ctx);
-            }
-        });
-
         // Create Render List for Depth Sorting
         const renderList = [];
 
@@ -1280,7 +1477,7 @@ class Game {
                             this.ctx.fillStyle = 'white';
                             this.ctx.font = '14px sans-serif';
                             this.ctx.textAlign = 'center';
-                            this.ctx.fillText("SPACE", chest.x + chest.width / 2, chest.y - 10);
+                            this.ctx.fillText("[SPACE] 開く", chest.x + chest.width / 2, chest.y - 10);
                         }
                     }
                 });
@@ -1379,7 +1576,7 @@ class Game {
             this.ctx.fillStyle = 'white';
             this.ctx.font = '14px sans-serif';
             this.ctx.textAlign = 'center';
-            this.ctx.fillText("SPACE", this.stairPromptX, this.stairPromptY - 20);
+            this.ctx.fillText("[SPACE] 進む", this.stairPromptX, this.stairPromptY - 20);
         }
 
         // Draw Animations (Foreground)
@@ -1459,13 +1656,23 @@ class Game {
 
             } else if (a.type === 'particle') {
                 this.ctx.fillStyle = a.color || 'white';
+
+                let currentW = a.w;
+                let currentH = a.h;
+
+                if (a.shrink) {
+                    const progress = a.life / a.maxLife; // 1 to 0
+                    currentW *= progress;
+                    currentH *= progress;
+                }
+
                 if (a.shape === 'circle') {
                     this.ctx.beginPath();
-                    const radius = (a.w + a.h) / 4; // Average radius
+                    const radius = (currentW + currentH) / 4;
                     this.ctx.arc(a.x + a.w / 2, a.y + a.h / 2, radius, 0, Math.PI * 2);
                     this.ctx.fill();
                 } else {
-                    this.ctx.fillRect(a.x, a.y, a.w, a.h);
+                    this.ctx.fillRect(a.x + (a.w - currentW) / 2, a.y + (a.h - currentH) / 2, currentW, currentH);
                 }
             } else if (a.type === 'ghost') {
                 this.ctx.save();
@@ -1629,25 +1836,29 @@ class Game {
         // Create the actual skill instance
         const skill = createSkill(skillData);
         if (skill) {
-            this.player.inventory.push(skill);
-            console.log(`Selected skill: ${skill.name}`);
+            const success = this.player.acquireSkill(skill);
 
-            // Notification
-            this.animations.push({
-                type: 'text',
-                text: `Learned ${skill.name}!`,
-                x: this.player.x, // Show near player
-                y: this.player.y - 20,
-                vx: 0,
-                vy: -50,
-                life: 2.0,
-                color: '#ffff00',
-                font: '16px bold sans-serif'
-            });
+            if (success) {
+                console.log(`Selected skill: ${skill.name}`);
 
-            this.spawnParticles(this.player.x + this.player.width / 2, this.player.y + this.player.height / 2, 20, '#ffff00');
+                // Notification
+                this.animations.push({
+                    type: 'text',
+                    text: `習得: ${skill.name}`,
+                    x: this.player.x,
+                    y: this.player.y - 20,
+                    vx: 0,
+                    vy: -50,
+                    life: 2.0,
+                    color: '#ffff00',
+                    font: 'bold 16px sans-serif'
+                });
 
-            // Auto Equip if slot looks empty? (Optional, kept simple)
+                this.spawnParticles(this.player.x + this.player.width / 2, this.player.y + this.player.height / 2, 20, '#ffff00');
+            } else {
+                this.logToScreen(`${skill.name} は既に所持しています。`);
+                this.player.addCurrency(50); // Refund/Compensation
+            }
         }
     }
 

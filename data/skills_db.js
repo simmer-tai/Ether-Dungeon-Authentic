@@ -24,7 +24,6 @@ export const skillsDB = [
             color: '#ff6600', // Orange Fire (still good for lighting/damage)
             trailColor: 'rgba(255, 100, 0, 0.5)',
             damageColor: '#ff6600',
-            knockback: 50, // Slight push
             statusEffect: 'burn',
             statusChance: 0.2,
             aetherCharge: 2.7, // Calculated: 5.0 / (1.5 hits / 0.8s)
@@ -526,56 +525,84 @@ export const skillsDB = [
             spriteSheet: 'assets/phoenix_aura.png',
             spriteData: 'assets/phoenix_aura.json',
             frames: 4
-        },
-        aetherRushDesc: '突撃速度と威力が大幅に上昇し、移動距離も延長される。'
+        }
     },
     {
         id: 'magma_spear',
-        name: 'マグマ・スピア', // Magma Spear
+        name: 'マグマスピア', // Magma Spear
         type: 'primary',
         icon: 'assets/icon_magma_spear.png',
         cooldown: 6.0,
         behavior: 'magma_spear',
-        description: '貫通するマグマの槍を放つ。通過した地面には継続ダメージと鈍足効果を与えるマグマ溜まりが残る。',
+        description: '敵や壁に着弾すると大爆発を起こし、周囲に複数の噴火を発生させるマグマの槍を放つ。',
         params: {
-            damage: 20,
-            speed: 400,
+            damage: 20, // Increased direct damage since it no longer pierces/bounces
+            speed: 900, // Slightly faster for impact feel
             life: 2.0,
             puddleDamage: 5,
-            puddleLife: 3.0,
-            puddleInterval: 0.1,
+            puddleLife: 4.0,
+            puddleInterval: 0.2,
             slowMultiplier: 0.5,
-            width: 48,
-            height: 16,
+            width: 128, // Visually bigger
             spriteSheet: 'assets/magma_spear.png',
             color: '#ff4400',
             trailColor: '#ffbb00',
-            aetherCharge: 2.0
-        },
-        aetherRushDesc: '槍が巨大化し、マグマ溜まりの範囲と持続時間が大幅に強化される。'
+            aetherCharge: 3.0,
+            puddleAetherCharge: 0.5,
+            critChance: 0.15,
+            critMultiplier: 2.0,
+            statusEffect: 'burn',
+            statusChance: 0.6
+        }
     },
     {
-        id: 'aqua_shot',
-        name: 'アクア・ショット', // Aqua Shot
-        type: 'normal',
-        icon: 'assets/icon_aqua_shot.png',
-        cooldown: 0.5,
-        behavior: 'aqua_shot',
-        description: '貫通する水の弾丸を放ち、敵を「濡れ」状態にする。「燃焼」状態の敵に当てると火を消すことができる。',
+        id: 'magma_core',
+        name: 'マグマコア', // Magma Core
+        type: 'ultimate',
+        icon: 'assets/icon_magma_core.png',
+        cooldown: 10.0,
+        behavior: 'magma_core',
+        description: '自身の周囲を回転する２つのマグマの核を生成する。核が敵に触れるとその足元に激しい噴火を引き起こし、周囲を焼き尽くす。',
         params: {
-            damage: 8,
-            speed: 500,
-            life: 0.8,
-            width: 16,
-            height: 16,
-            spriteSheet: 'assets/aqua_shot.png',
-            color: '#00aaff',
-            trailColor: 'rgba(0, 170, 255, 0.4)',
-            damageColor: '#00aaff',
-            statusEffect: 'wet',
-            statusChance: 1.0,
-            aetherCharge: 2.0,
-            pierce: 0 // Normal projectile (stops on hit usually, but check pierce logic)
-        }
+            damage: 7,
+            duration: 8.0,
+            orbitRadius: 80,
+            coreRadius: 18,
+            rotationSpeed: 7.0,
+            spriteSheet: 'assets/magma_core.png',
+            puddleDamage: 3,
+            puddleLife: 3.0,
+            damageColor: '#ff4400',
+            aetherCharge: 0.5,
+            puddleAetherCharge: 0.2,
+            critChance: 0.1,
+            critMultiplier: 2.0,
+            statusEffect: 'burn',
+            statusChance: 0.2
+        },
+        aetherRushDesc: '核の数が２つから４つに増加し、回転速度と範囲が強化される。'
+    },
+    {
+        id: 'volt_drive',
+        name: 'ボルト・ドライブ', // Volt Drive
+        type: 'ultimate',
+        icon: 'assets/icon_volt_drive.png', // Placeholder
+        cooldown: 20.0,
+        behavior: 'volt_drive',
+        description: '一定時間、雷光と化して戦場を疾駆する奥義。移動速度が大幅に上昇し、ダッシュで敵を貫き、周囲に自動で雷撃を放つ。',
+        params: {
+            duration: 8.0,
+            speedMult: 1.8,
+            autoLightningInterval: 0.4,
+            damage: 10,
+            dashDamage: 25,
+            chainCount: 3,
+            chainRange: 150,
+            damageColor: '#ffff00',
+            aetherCharge: 0,
+            critChance: 0.2,
+            critMultiplier: 2.0
+        },
+        aetherRushDesc: '効果時間が12秒に延長され、自動雷撃の間隔が短縮、さらに回避の無敵時間が延長される。'
     }
 ];

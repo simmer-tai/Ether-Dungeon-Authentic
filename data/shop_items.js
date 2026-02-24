@@ -80,8 +80,10 @@ export async function generateSkillStock(count = 2) {
             apply(game) {
                 const skill = createSkill(skillData);
                 if (skill) {
-                    game.player.inventory.push(skill);
-                    spawnBurst(game, BURST_COLORS[rarity], rarity === 'epic' ? 40 : rarity === 'rare' ? 25 : 15);
+                    const success = game.player.acquireSkill(skill);
+                    if (success) {
+                        spawnBurst(game, BURST_COLORS[rarity], rarity === 'epic' ? 40 : rarity === 'rare' ? 25 : 15);
+                    }
                 }
             }
         };

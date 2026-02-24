@@ -64,7 +64,7 @@ export const barrageBehaviors = {
                         let vy = Math.sin(finalAngle) * baseSpeed;
 
                         const waveParams = { ...params };
-                        if (baseVy !== 0 && params.width && params.height) {
+                        if (baseVy !== 0 && baseVx === 0 && params.width && params.height) {
                             waveParams.width = params.height;
                             waveParams.height = params.width;
                         }

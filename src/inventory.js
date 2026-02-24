@@ -180,7 +180,7 @@ export function renderInventory(game) {
                 icon.style.display = 'none';
             }
         } else {
-            el.textContent = "Empty";
+            el.textContent = "空き";
             el.style.color = '#888';
             if (icon) icon.style.display = 'none';
         }

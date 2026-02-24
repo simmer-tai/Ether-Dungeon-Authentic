@@ -146,31 +146,6 @@ export const projectileBehaviors = {
                     // Expanding Circle Effect (Explosion) - Small & Light shake
                     spawnExplosion(gameInstance, this.x + this.w / 2, this.y + this.h / 2, params.color || 'orange', 0.25, 0.1);
 
-                    // Knockback (Slight) with Wall Collision Check
-                    const angle = Math.atan2(this.vy, this.vx);
-                    const k = params.knockback || 0;
-                    if (k > 0) {
-                        const pushX = Math.cos(angle) * k * 0.1;
-                        const pushY = Math.sin(angle) * k * 0.1;
-
-                        // Helper to check 4 corners
-                        const checkWallOverlap = (x, y, w, h) => {
-                            return gameInstance.map.isWall(x, y) ||
-                                gameInstance.map.isWall(x + w, y) ||
-                                gameInstance.map.isWall(x, y + h) ||
-                                gameInstance.map.isWall(x + w, y + h);
-                        };
-
-                        // Try X
-                        if (!checkWallOverlap(enemy.x + pushX, enemy.y, enemy.width, enemy.height)) {
-                            enemy.x += pushX;
-                        }
-                        // Try Y
-                        if (!checkWallOverlap(enemy.x, enemy.y + pushY, enemy.width, enemy.height)) {
-                            enemy.y += pushY;
-                        }
-                    }
-
                     this.life = 0; // Destroy on one hit
                 };
             }
@@ -910,7 +885,8 @@ export const projectileBehaviors = {
             spriteSheet: 'assets/tornado.png',
             noTrail: true, // Ensure no orange trails
             damageColor: params.damageColor, // Pass damageColor
-            aetherCharge: params.aetherCharge // Pass charge
+            aetherCharge: params.aetherCharge, // Pass charge
+            pierce: 999 // Ensure it passes through all enemies
         });
 
         if (proj) {
@@ -1009,6 +985,8 @@ export const projectileBehaviors = {
             proj.ignoreWallDestruction = true;
 
             proj.update = function (dt) {
+                if (this.hitPool) this.hitPool.clear(); // Allow re-collision for suction/drag every frame
+
                 if (this.opacity === undefined) this.opacity = 1.0;
 
                 this.x += this.vx * dt;
@@ -1318,12 +1296,6 @@ export const projectileBehaviors = {
         else if (user.facing === 'down-left') { vx = -speed * 0.707; vy = speed * 0.707; rotation = 3 * Math.PI / 4; }
         else if (user.facing === 'down-right') { vx = speed * 0.707; vy = speed * 0.707; rotation = Math.PI / 4; }
 
-        if (user.isAetherRush) {
-            speed *= 1.5;
-            vx *= 1.5;
-            vy *= 1.5;
-        }
-
         const spawnX = user.x + user.width / 2;
         const spawnY = user.y + user.height / 2;
 
@@ -1331,138 +1303,167 @@ export const projectileBehaviors = {
             ...params,
             rotation: rotation,
             fixedOrientation: true,
-            pierce: 999 // Always pierce
+            pierce: 0 // No pierce: explodes on first hit
         });
 
         if (proj) {
-            proj.puddleTimer = 0;
-            const originalUpdate = proj.update;
-            proj.update = function (dt) {
-                // Spawn Puddles
-                this.puddleTimer += dt;
-                const interval = user.isAetherRush ? params.puddleInterval * 0.5 : params.puddleInterval;
-                if (this.puddleTimer >= interval) {
-                    this.puddleTimer = 0;
+            // Helper to trigger the "Reworked Impact" (Explosion + Eruptions)
+            const triggerImpact = (gameObj, x, y) => {
+                // 1. Central Large Explosion
+                spawnExplosion(gameObj, x, y, params.color || '#ff4400', 0.5, 0.15);
+                gameObj.camera.shake(0.2, 8);
 
-                    const puddleLife = user.isAetherRush ? params.puddleLife * 1.5 : params.puddleLife;
-                    const puddleScale = user.isAetherRush ? 1.5 : 1.0;
+                // 2. Spawn multiple Eruptions (Magma Puddles + Fire Particles)
+                const eruptionCount = 16;
+                const spread = 120;
 
-                    game.animations.push({
+                for (let i = 0; i < eruptionCount; i++) {
+                    let ox = 0, oy = 0;
+                    let dist = 0;
+                    if (i > 0) {
+                        // Circular distribution with quadratic falloff for center density
+                        const angle = Math.random() * Math.PI * 2;
+                        dist = Math.pow(Math.random(), 2) * spread; // Squared random for center bias
+                        ox = Math.cos(angle) * dist;
+                        oy = Math.sin(angle) * dist;
+                    }
+                    const ex = x + ox;
+                    const ey = y + oy;
+
+                    // Delay based on distance for "spreading outward" feel
+                    const startDelay = (dist / spread) * 0.25;
+
+                    const pLife = params.puddleLife;
+                    gameObj.animations.push({
                         type: 'magma_puddle',
-                        layer: 'bottom', // Render below entities
-                        x: this.x + this.w / 2,
-                        y: this.y + this.h / 2,
-                        radius: 24 * puddleScale,
-                        life: puddleLife,
-                        maxLife: puddleLife,
+                        layer: 'bottom',
+                        x: ex,
+                        y: ey,
+                        radius: 20,
+                        life: pLife,
+                        maxLife: pLife,
+                        delay: startDelay,
                         damage: params.puddleDamage || 5,
-                        slow: params.slowMultiplier || 0.5,
-                        hitEnemies: new Map(), // Enemy -> TimeToNextTick
+                        slow: 0.5,
+                        hitEnemies: new Map(),
+                        randSeed: Math.random() * 100,
+                        randHeight: 0.8 + Math.random() * 0.4,
+                        randSpeed: 0.9 + Math.random() * 0.2,
                         update: function (dt2) {
+                            if (this.delay > 0) {
+                                this.delay -= dt2;
+                                return;
+                            }
                             this.life -= dt2;
-                            // Check collisions
-                            game.enemies.forEach(e => {
-                                const dx = (e.x + e.width / 2) - this.x;
-                                const dy = (e.y + e.height / 2) - this.y;
-                                if (Math.hypot(dx, dy) < this.radius) {
-                                    // Apply Slow
-                                    e.tempSlow = 0.2;
-                                    e.slowMultiplier = this.slow;
-
-                                    let tickTimer = this.hitEnemies.get(e) || 0;
+                            if (Math.random() < 0.5) {
+                                const isSmoke = Math.random() < 0.3;
+                                gameObj.spawnParticles(
+                                    this.x + (Math.random() - 0.5) * this.radius * 0.4,
+                                    this.y,
+                                    1,
+                                    isSmoke ? '#333333' : (Math.random() < 0.5 ? '#ff4400' : '#ffbb00'),
+                                    (Math.random() - 0.5) * 12,
+                                    -60 - Math.random() * 60,
+                                    { shape: 'circle', shrink: true, size: 6 + Math.random() * 4 }
+                                );
+                            }
+                            gameObj.enemies.forEach(e2 => {
+                                const ex2 = (e2.x + e2.width / 2) - this.x;
+                                const ey2 = (e2.y + e2.height / 2) - this.y;
+                                if (Math.hypot(ex2, ey2) < this.radius) {
+                                    e2.tempSlow = 0.2;
+                                    e2.slowMultiplier = this.slow;
+                                    let tickTimer = this.hitEnemies.get(e2) || 0;
                                     tickTimer -= dt2;
-
                                     if (tickTimer <= 0) {
-                                        e.takeDamage(this.damage, '#ff4400', 0);
-                                        this.hitEnemies.set(e, 0.5); // 0.5s interval
-                                        game.spawnParticles(e.x + e.width / 2, e.y + e.height / 2, 2, '#ff4400', -this.vx * 0.2, -this.vy * 0.2);
+                                        const isCrit = false;
+                                        const finalDmg = this.damage;
+                                        e2.takeDamage(finalDmg, '#ff4400', params.puddleAetherCharge || 0.1, isCrit);
+                                        this.hitEnemies.set(e2, 0.4); // Faster ticks
+                                        gameObj.spawnParticles(e2.x + e2.width / 2, e2.y + e2.height / 2, 2, '#ff4400');
                                     } else {
-                                        this.hitEnemies.set(e, tickTimer);
+                                        this.hitEnemies.set(e2, tickTimer);
                                     }
                                 }
                             });
                         },
                         draw: function (ctx) {
+                            if (this.delay > 0) return;
                             ctx.save();
-                            ctx.globalAlpha = Math.min(1, this.life / 0.5) * 0.6;
-                            ctx.fillStyle = '#ff4400';
-                            ctx.beginPath();
-                            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                            ctx.fill();
-                            // Inner glow
-                            ctx.fillStyle = '#ffbb00';
-                            ctx.beginPath();
-                            ctx.arc(this.x, this.y, this.radius * 0.6, 0, Math.PI * 2);
-                            ctx.fill();
+                            const alpha = Math.min(1, this.life / 0.5);
+                            ctx.globalAlpha = alpha * 0.8;
+                            const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+                            grad.addColorStop(0, '#ff4400');
+                            grad.addColorStop(1, 'rgba(255, 68, 0, 0)');
+                            ctx.fillStyle = grad;
+                            ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
+                            const surfaceGrad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+                            surfaceGrad.addColorStop(0, 'rgba(255, 68, 0, 0.8)');
+                            surfaceGrad.addColorStop(0.6, 'rgba(255, 68, 0, 0.3)');
+                            surfaceGrad.addColorStop(1, 'rgba(255, 68, 0, 0)');
+                            ctx.fillStyle = surfaceGrad;
+                            ctx.beginPath(); ctx.ellipse(this.x, this.y, this.radius, this.radius * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+                            const t = (this.maxLife - this.life) * 10 * this.randSpeed + this.randSeed;
+                            const emberCount = 14;
+                            for (let i = 0; i < emberCount; i++) {
+                                const offset = (i / emberCount) * Math.PI * 2;
+                                const progress = (t * 0.15 + offset) % 1.0;
+                                const spreadX = Math.sin(this.randSeed + i * 2) * (this.radius * 0.25);
+                                const exP = this.x + spreadX * progress;
+                                const eyP = this.y - (this.radius * 1.2 * progress * this.randHeight);
+                                const eSize = (6 + Math.random() * 4) * (1 - progress * 0.7);
+                                let color;
+                                if (progress < 0.4) color = i % 3 === 0 ? '#ffffff' : (i % 3 === 1 ? '#ffff00' : '#ff4400');
+                                else if (progress < 0.7) color = '#662200';
+                                else color = '#111111';
+                                ctx.globalAlpha = alpha * (1 - progress);
+                                ctx.fillStyle = color;
+                                ctx.beginPath(); ctx.arc(exP, eyP, eSize, 0, Math.PI * 2); ctx.fill();
+                            }
+                            const coreGrad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius * 0.5);
+                            coreGrad.addColorStop(0, '#ffff00'); coreGrad.addColorStop(1, 'rgba(255, 187, 0, 0)');
+                            ctx.fillStyle = coreGrad;
+                            ctx.beginPath(); ctx.ellipse(this.x, this.y, this.radius * 0.4, this.radius * 0.2, 0, 0, Math.PI * 2); ctx.fill();
                             ctx.restore();
                         }
                     });
                 }
+            };
 
-                // Wall Check
-                if (game.map.isWall(this.x + this.w / 2, this.y + this.h / 2)) {
-                    this.life = 0;
+            proj.onHitWall = function (gameInstance) {
+                const cx = this.x + this.w / 2;
+                const cy = this.y + this.h / 2;
+                const halfLen = 64; // Spear length is 128
+                const tipX = cx + Math.cos(this.rotation) * halfLen;
+                const tipY = cy + Math.sin(this.rotation) * halfLen;
+
+                triggerImpact(gameInstance, tipX, tipY);
+                this.life = 0; // Destroy on wall hit
+            };
+
+            proj.onHitEnemy = function (enemy, gameInstance) {
+                // 1. Initial Spear Damage
+                const isCrit = params.critChance > 0 && Math.random() < params.critChance;
+                const finalDamage = isCrit ? params.damage * (params.critMultiplier || 2.0) : params.damage;
+                enemy.takeDamage(finalDamage, params.damageColor, params.aetherCharge || 0, isCrit);
+
+                if (params.statusEffect && Math.random() < (params.statusChance || 0)) {
+                    if (enemy.statusManager) {
+                        enemy.statusManager.applyStatus(params.statusEffect, 5.0);
+                    }
                 }
 
-                // Call basic movement/life update
-                if (originalUpdate) originalUpdate.call(this, dt);
+                // 2. Trigger Burst at Tip
+                const cx = this.x + this.w / 2;
+                const cy = this.y + this.h / 2;
+                const halfLen = 64;
+                const tipX = cx + Math.cos(this.rotation) * halfLen;
+                const tipY = cy + Math.sin(this.rotation) * halfLen;
+
+                triggerImpact(gameInstance, tipX, tipY);
+
+                this.life = 0; // Destroy on first enemy hit
             };
         }
     },
-    'aqua_shot': (user, game, params) => {
-        let vx = 0, vy = 0;
-        let speed = params.speed || 500;
-        let rotation = 0;
-
-        // Directional logic
-        if (user.facing === 'left') { vx = -speed; rotation = Math.PI; }
-        else if (user.facing === 'right') { vx = speed; rotation = 0; }
-        else if (user.facing === 'up') { vy = -speed; rotation = -Math.PI / 2; }
-        else if (user.facing === 'bottom' || user.facing === 'down') { vy = speed; rotation = Math.PI / 2; }
-        else if (user.facing === 'up-left') { vx = -speed * 0.707; vy = -speed * 0.707; rotation = -3 * Math.PI / 4; }
-        else if (user.facing === 'up-right') { vx = speed * 0.707; vy = -speed * 0.707; rotation = -Math.PI / 4; }
-        else if (user.facing === 'down-left') { vx = -speed * 0.707; vy = speed * 0.707; rotation = 3 * Math.PI / 4; }
-        else if (user.facing === 'down-right') { vx = speed * 0.707; vy = speed * 0.707; rotation = Math.PI / 4; }
-
-        const spawnX = user.x + user.width / 2;
-        const spawnY = user.y + user.height / 2;
-
-        spawnProjectile(game, spawnX, spawnY, vx, vy, {
-            ...params,
-            rotation: rotation,
-            fixedOrientation: true,
-            onHitEnemy: function (enemy, g) {
-                // Apply Damage and Status (Standard)
-                enemy.takeDamage(this.damage, this.damageColor, this.aetherCharge);
-                if (enemy.statusManager) {
-                    enemy.statusManager.applyStatus(params.statusEffect, 5.0);
-                }
-
-                // Custom Splash Effect
-                for (let i = 0; i < 8; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const s = 50 + Math.random() * 100;
-                    g.animations.push({
-                        type: 'particle',
-                        x: enemy.x + enemy.width / 2,
-                        y: enemy.y + enemy.height / 2,
-                        w: 4 + Math.random() * 6,
-                        h: 4 + Math.random() * 6,
-                        life: 0.3 + Math.random() * 0.2,
-                        maxLife: 0.5,
-                        color: '#aae6ff', // Light Water Blue
-                        vx: Math.cos(angle) * s,
-                        vy: Math.sin(angle) * s,
-                        update: function (dt) {
-                            this.life -= dt;
-                            this.x += this.vx * dt;
-                            this.y += this.vy * dt;
-                            this.vy += 200 * dt; // Gravity
-                        }
-                    });
-                }
-                this.life = 0; // Destroy on hit
-            }
-        });
-    }
 };

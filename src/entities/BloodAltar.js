@@ -57,7 +57,7 @@ export class BloodAltar extends Entity {
             ctx.fillStyle = '#ff4444';
             ctx.font = 'bold 18px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('[SPACE]', this.x + this.width / 2, this.y - 15);
+            ctx.fillText('[SPACE] 調べる', this.x + this.width / 2, this.y - 15);
             ctx.restore();
         }
     }

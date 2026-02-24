@@ -71,6 +71,20 @@ export const spawnProjectile = (game, x, y, vx, vy, params) => {
         critChance: params.critChance || 0,
         critMultiplier: params.critMultiplier || 2.0,
         update: function (dt) {
+            // Adaptive Aspect Ratio (User request: use image ratio)
+            if (this.image && this.image.complete && !this._ratioApplied && params.fixedOrientation) {
+                const sw = (this.spriteFrames && this.spriteFrames.length > 0) ? this.spriteFrames[0].w : this.image.width / this.frames;
+                const sh = (this.spriteFrames && this.spriteFrames.length > 0) ? this.spriteFrames[0].h : this.image.height;
+
+                if (sw > 0 && sh > 0) {
+                    const ratio = sw / sh;
+                    const oldH = this.h;
+                    this.h = this.w / ratio;
+                    this.y -= (this.h - oldH) / 2; // Keep center-aligned
+                    this._ratioApplied = true;
+                }
+            }
+
             this.vx += (this.ax || 0) * dt;
             this.vy += (this.ay || 0) * dt;
             this.x += this.vx * dt;
@@ -706,34 +720,35 @@ export const spawnLightningBolt = (game, x, y, options = {}) => {
 };
 
 // --- Aether Explosion ---
-export function spawnAetherExplosion(game, x, y) {
-    // 1. Large Expanding Ring (White/Transparent)
+export function spawnAetherExplosion(game, x, y, options = {}) {
+    // 1. Large Expanding Ring
     game.animations.push({
         type: 'ring',
         x: x, y: y,
-        radius: 5, // Halved
-        maxRadius: 150, // Halved from 300
-        width: 25, // Halved from 50
+        radius: 5,
+        maxRadius: 150,
+        width: 25,
         life: 0.6,
         maxLife: 0.6,
-        color: 'rgba(255, 255, 255, 0.7)', // White with transparency
+        color: options.ringColor || 'rgba(255, 255, 255, 0.7)',
     });
 
-    // 2. High Density Particle Burst (White)
+    // 2. High Density Particle Burst
     const particleCount = 60;
+    const pColor = options.particleColor;
     for (let i = 0; i < particleCount; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const speed = (200 + Math.random() * 600) * 0.5; // Halved speed to reduce spread
+        const speed = (200 + Math.random() * 600) * 0.5;
         game.animations.push({
             type: 'particle',
             x: x, y: y,
-            w: 4, h: 4, // Slightly smaller (was 6)
+            w: 4, h: 4,
             life: 0.5 + Math.random() * 0.5,
             maxLife: 1.0,
-            color: Math.random() < 0.5 ? 'rgba(255, 255, 255, 0.8)' : 'rgba(200, 200, 255, 0.8)', // White with slight blue tint variance
+            color: pColor || (Math.random() < 0.5 ? 'rgba(255, 255, 255, 0.8)' : 'rgba(200, 200, 255, 0.8)'),
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
-            drag: 0.95 // Slow down
+            drag: 0.95
         });
     }
 

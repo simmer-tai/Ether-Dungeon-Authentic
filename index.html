@@ -29,6 +29,29 @@
     </script>
     <div id="game-container">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <!-- Title Screen -->
+        <div id="title-screen">
+            <div class="title-container">
+                <h1 class="game-title">Aether Dungeon</h1>
+                <p class="game-subtitle">~ エーテル・ダンジョン ~</p>
+                <button id="btn-start-game" class="title-btn">冒険を始める</button>
+            </div>
+            <div class="title-footer">
+                v1.2.0 | &copy; 2024 Aether Team
+            </div>
+        </div>
+
+        <!-- Loading Screen -->
+        <div id="loading-screen">
+            <div class="loading-container">
+                <div class="loading-text">ダンジョンを生成中...</div>
+                <div class="loading-bar-track">
+                    <div class="loading-bar-fill"></div>
+                </div>
+            </div>
+        </div>
+
         <div id="ui-layer">
             <div id="health-bar-container">
                 <div id="health-bar-label">HP</div>
@@ -47,7 +70,7 @@
             </div>
 
             <div id="floor-display">
-                <span id="floor-label">Floor</span>
+                <span id="floor-label">階層</span>
                 <span id="floor-value">1</span>
             </div>
         </div>
@@ -64,10 +87,15 @@
             <div
                 style="background: #222; padding: 20px; border: 2px solid #555; border-radius: 10px; text-align: center; color: white; min-width: 300px;">
                 <h2 style="margin-top: 0;">設定</h2>
-                <button id="btn-training"
-                    style="display: block; width: 100%; padding: 10px; margin: 10px 0; background: #444; color: white; border: none; cursor: pointer;">訓練場へ移動</button>
-                <button id="btn-close-settings"
-                    style="display: block; width: 100%; padding: 10px; margin: 10px 0; background: #666; color: white; border: none; cursor: pointer;">閉じる</button>
+                <div class="setting-item">
+                    <label>音量</label>
+                    <input type="range" id="sound-volume" min="0" max="1" step="0.1" value="0.5">
+                </div>
+                <div class="setting-item">
+                    <label>BGM音量</label>
+                    <input type="range" id="music-volume" min="0" max="1" step="0.1" value="0.5">
+                </div>
+                <button id="btn-close-settings">閉じる</button>
             </div>
         </div>
 
@@ -75,7 +103,7 @@
         <!-- Skill Selection Modal -->
         <div id="skill-selection-modal" style="display: none;">
             <div class="skill-selection-container">
-                <h2>Level Up! Choose a Skill</h2>
+                <h2>レベルアップ！スキルを選択してください</h2>
                 <div id="skill-selection-cards">
                     <!-- Cards injected by JS -->
                 </div>

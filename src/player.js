@@ -1,4 +1,4 @@
-import { Entity } from './utils.js';
+import { Entity, getCachedImage } from './utils.js';
 import { SkillType, spawnAetherExplosion } from './skills/index.js';
 
 export class Player extends Entity {
@@ -35,18 +35,19 @@ export class Player extends Entity {
         this.scale = 1.0;
         this.alpha = 1.0;
 
-        this.image = new Image();
-        this.image.src = 'assets/player_sprites.png';
-        this.image.onload = () => {
-            console.log('Player sprite loaded:', this.image.width, 'x', this.image.height);
-            // Dynamic frame size calculation assuming 4x4 grid
-            this.rawSpriteWidth = this.image.width / 4;
-            this.rawSpriteHeight = this.image.height / 4;
-            console.log('raw sprite size:', this.rawSpriteWidth, 'x', this.rawSpriteHeight);
+        this.image = getCachedImage('assets/player_sprites.png');
+        const checkLoad = () => {
+            if (this.image.complete && this.image.naturalWidth !== 0) {
+                this.rawSpriteWidth = this.image.width / 4;
+                this.rawSpriteHeight = this.image.height / 4;
+            } else {
+                this.image.onload = () => {
+                    this.rawSpriteWidth = this.image.width / 4;
+                    this.rawSpriteHeight = this.image.height / 4;
+                };
+            }
         };
-        this.image.onerror = (e) => {
-            console.error('Failed to load player sprite:', e);
-        };
+        checkLoad();
 
         // Sprite animation properties
         this.frameX = 0;
@@ -88,6 +89,8 @@ export class Player extends Entity {
             .catch(err => console.error('Failed to load sprite JSON:', err));
 
         this.bloodBlessings = [];
+        this.voltDriveTimer = 0;
+        this.voltDriveParams = null;
     }
 
     get damageMultiplier() {
@@ -108,6 +111,9 @@ export class Player extends Entity {
                 if (b.buff && b.buff.speedMult) mult *= b.buff.speedMult;
             });
         }
+        if (this.voltDriveTimer > 0 && this.voltDriveParams) {
+            mult *= (this.voltDriveParams.speedMult || 1.8);
+        }
         return 250 * mult;
     }
 
@@ -124,6 +130,21 @@ export class Player extends Entity {
     addCurrency(amount) {
         this.currency += amount;
         // console.log(`Currency: ${this.currency} (+${amount})`);
+    }
+
+    acquireSkill(skill) {
+        if (!skill) return false;
+
+        // Check for duplicates
+        const exists = this.inventory.some(s => s.id === skill.id);
+        if (exists) {
+            console.log(`Skill already possessed: ${skill.name}`);
+            return false;
+        }
+
+        this.inventory.push(skill);
+        console.log(`Acquired new skill: ${skill.name}`);
+        return true;
     }
 
     equipSkill(skill, slot) {
@@ -160,11 +181,31 @@ export class Player extends Entity {
 
             // dt-based dash timer (respects timeScale / slow motion)
             this.dashElapsed = (this.dashElapsed || 0) + dt;
+
+            // Volt Drive: Dash thru enemies
+            if (this.voltDriveTimer > 0) {
+                this.game.enemies.forEach(e => {
+                    if (this.checkCollision(this, e)) {
+                        const hitKey = `volt_dash_${e.id}`;
+                        this.voltHitList = this.voltHitList || new Set();
+                        if (!this.voltHitList.has(hitKey)) {
+                            const dmg = this.voltDriveParams.dashDamage || 20;
+                            const isCrit = Math.random() < (this.voltDriveParams.critChance || 0);
+                            const finalDmg = isCrit ? dmg * (this.voltDriveParams.critMultiplier || 2.0) : dmg;
+                            e.takeDamage(finalDmg, '#ffff00', 0, isCrit);
+                            this.voltHitList.add(hitKey);
+                            this.game.spawnParticles(e.x + e.width / 2, e.y + e.height / 2, 5, '#ffff00');
+                        }
+                    }
+                });
+            }
+
             if (this.dashElapsed >= this.dashDuration) {
                 this.isDashing = false;
                 this.dashVx = 0;
                 this.dashVy = 0;
                 this.dashElapsed = 0;
+                if (this.voltHitList) this.voltHitList.clear();
             }
         } else if (this.isCasting) {
             // Block movement input
@@ -241,10 +282,33 @@ export class Player extends Entity {
                     1, '#00ffff'
                 );
             }
+        }
 
-            // Ghost Afterimage Effect
+        // Volt Drive Logic
+        if (this.voltDriveTimer > 0) {
+            this.voltDriveTimer -= dt;
+            if (this.voltDriveTimer <= 0) {
+                this.voltDriveTimer = 0;
+                this.voltDriveParams = null;
+            }
+
+            // Passive particles
+            if (Math.random() < 0.4) {
+                this.game.spawnParticles(
+                    this.x + this.width / 2 + (Math.random() - 0.5) * 25,
+                    this.y + this.height / 2 + (Math.random() - 0.5) * 25,
+                    1, '#ffff00',
+                    (Math.random() - 0.5) * 50, -50,
+                    { shape: 'circle', shrink: true }
+                );
+            }
+        }
+
+        // Ghost Afterimage Effect (Combined for Aether Rush AND Volt Drive)
+        if (this.isAetherRush || this.voltDriveTimer > 0) {
             this.ghostTimer = (this.ghostTimer || 0) + dt;
-            if (this.ghostTimer > 0.05) { // Every 0.05s
+            const ghostInterval = (this.voltDriveTimer > 0) ? 0.04 : 0.05;
+            if (this.ghostTimer > ghostInterval) {
                 this.ghostTimer = 0;
 
                 // Calculate current frame data exactly like render()
@@ -257,6 +321,8 @@ export class Player extends Entity {
                         const drawHeight = drawWidth / ratio;
                         const drawX = this.x + (this.width - drawWidth) / 2;
                         const drawY = this.y + this.height - drawHeight;
+
+                        const isVolt = this.voltDriveTimer > 0;
 
                         this.game.animations.push({
                             type: 'ghost',
@@ -271,11 +337,16 @@ export class Player extends Entity {
                             sh: frameData.h,
                             life: 0.3,
                             maxLife: 0.3,
+                            isVolt: isVolt,
                             update: function (dt) { this.life -= dt; },
                             draw: function (ctx) {
                                 ctx.save();
                                 ctx.globalAlpha = (this.life / this.maxLife) * 0.6;
-                                ctx.filter = 'brightness(2) grayscale(100%)'; // Removed expensive drop-shadow
+                                if (this.isVolt) {
+                                    ctx.filter = 'brightness(1.5) sepia(100%) saturate(1000%) hue-rotate(-20deg)'; // Golden/Yellow
+                                } else {
+                                    ctx.filter = 'brightness(2) grayscale(100%)';
+                                }
                                 ctx.drawImage(
                                     this.image,
                                     this.sx, this.sy, this.sw, this.sh,

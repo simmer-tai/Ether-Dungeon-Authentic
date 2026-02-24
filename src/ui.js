@@ -53,10 +53,10 @@ export function drawUI(ctx, game, width, height) {
         ctx.fillRect(0, 0, width, height);
         ctx.fillStyle = 'red';
         ctx.font = '40px Arial';
-        ctx.fillText("GAME OVER", width / 2 - 100, height / 2);
+        ctx.fillText("ゲームオーバー", width / 2 - 100, height / 2);
         ctx.fillStyle = 'white';
         ctx.font = '20px Arial';
-        ctx.fillText("Press SPACE to Restart", width / 2 - 100, height / 2 + 40);
+        ctx.fillText("スペースキーでリスタート", width / 2 - 140, height / 2 + 40);
         return;
     }
 
@@ -306,7 +306,7 @@ export function showSkillSelection(skills, onSelectCallback) {
         // Description
         const desc = document.createElement('div');
         desc.className = 'skill-card-desc';
-        desc.textContent = skill.description || 'No description available.';
+        desc.textContent = skill.description || '説明がありません。';
         card.appendChild(desc);
 
         // Click Handler

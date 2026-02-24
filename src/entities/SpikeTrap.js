@@ -47,13 +47,6 @@ export class SpikeTrap extends Entity {
 
         // Damage Logic
         if (this.state === this.states.ACTIVE) {
-            // Check enemies
-            this.game.enemies.forEach(enemy => {
-                if (this.checkCollisionWith(enemy)) {
-                    this.triggerTrap(enemy);
-                }
-            });
-
             // Check player
             if (this.checkCollisionWith(this.game.player)) {
                 this.triggerTrap(this.game.player, true);

@@ -46,6 +46,7 @@ export const getCachedImage = (src) => {
     if (window.imageCache[src]) return window.imageCache[src];
     const img = new Image();
     img.src = src;
+    img.onerror = () => console.error("Failed to load image:", src);
     window.imageCache[src] = img;
     return img;
 };

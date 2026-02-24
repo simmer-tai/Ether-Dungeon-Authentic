@@ -1030,9 +1030,7 @@ export const areaBehaviors = {
         const skillInstance = this;
 
         if (user.isAetherRush) {
-            speed *= 1.3;
-            duration *= 1.2;
-            damage *= 1.5;
+            // Aether Rush Modifiers - Removed for Primary skill policy
         }
 
         let dx = 0, dy = 0;
@@ -1375,6 +1373,438 @@ export const areaBehaviors = {
                 }
             }
         });
-    }
-};
+    },
+    'magma_core': (user, game, params) => {
+        const duration = params.duration || 8.0;
+        const orbitRadius = params.orbitRadius || 80;
+        const coreRadius = params.coreRadius || 18;
+        let rotationSpeed = params.rotationSpeed || 3.5;
+        if (user.isAetherRush) rotationSpeed *= 2.0;
+        const count = user.isAetherRush ? 4 : 2;
 
+        const pDamage = params.puddleDamage || 5;
+        const pLife = params.puddleLife || 3.0;
+
+        game.animations.push({
+            type: 'magma_core_controller',
+            life: duration,
+            maxLife: duration,
+            angle: 0,
+            cores: [],
+            init: function () {
+                for (let i = 0; i < count; i++) {
+                    this.cores.push({
+                        angleOffset: (i / count) * Math.PI * 2,
+                        puddleTimers: new Map() // Enemy -> Cooldown
+                    });
+                }
+            },
+            update: function (dt) {
+                if (this.cores.length === 0) this.init();
+                this.life -= dt;
+                this.age = (this.age || 0) + dt;
+                const spawnRatio = Math.min(1.0, this.age / 0.5);
+                const despawnRatio = Math.min(1.0, this.life / 0.5);
+                const finalRatio = spawnRatio * despawnRatio;
+
+                const currentOrbit = orbitRadius * finalRatio;
+                const currentCore = coreRadius * finalRatio;
+
+                this.angle += rotationSpeed * dt;
+                this.selfAngle = (this.selfAngle || 0) + (rotationSpeed * 2.5 * dt);
+
+                const cx = user.x + user.width / 2;
+                const cy = user.y + user.height / 2;
+
+                this.cores.forEach(c => {
+                    const angle = this.angle + c.angleOffset;
+                    const x = cx + Math.cos(angle) * currentOrbit;
+                    const y = cy + Math.sin(angle) * currentOrbit;
+
+                    // Update Puddle Cooldowns
+                    for (let [e, t] of c.puddleTimers) {
+                        if (t > 0) c.puddleTimers.set(e, t - dt);
+                        else c.puddleTimers.delete(e);
+                    }
+
+                    // Direct Damage & On-Hit Eruption
+                    game.enemies.forEach(e => {
+                        const ex = (e.x + e.width / 2) - x;
+                        const ey = (e.y + e.height / 2) - y;
+                        if (Math.hypot(ex, ey) < currentCore) {
+                            // Critical hit roll
+                            const isCrit = params.critChance > 0 && Math.random() < params.critChance;
+                            const finalDamage = isCrit ? params.damage * (params.critMultiplier || 2.0) : params.damage;
+
+                            e.takeDamage(finalDamage, params.damageColor, params.aetherCharge || 0, isCrit);
+
+                            // Apply Status
+                            if (params.statusEffect && Math.random() < (params.statusChance || 0)) {
+                                if (e.statusManager) {
+                                    e.statusManager.applyStatus(params.statusEffect, 5.0);
+                                }
+                            }
+
+                            game.spawnParticles(e.x + e.width / 2, e.y + e.height / 2, isCrit ? 6 : 2, params.damageColor);
+
+                            // Eruption Trigger
+                            let pTimer = c.puddleTimers.get(e) || 0;
+                            if (pTimer <= 0) {
+                                c.puddleTimers.set(e, 0.4); // Cooldown to prevent spam
+
+                                const enemyFeetX = e.x + e.width / 2;
+                                const enemyFeetY = e.y + e.height;
+
+                                for (let i = 0; i < 3; i++) {
+                                    const ox = (Math.random() - 0.5) * 40;
+                                    const oy = (Math.random() - 0.5) * 20;
+
+                                    game.animations.push({
+                                        type: 'magma_puddle',
+                                        layer: 'bottom',
+                                        x: enemyFeetX + ox,
+                                        y: enemyFeetY + oy,
+                                        radius: 20,
+                                        life: pLife,
+                                        maxLife: pLife,
+                                        damage: pDamage,
+                                        slow: 0.5,
+                                        hitEnemies: new Map(),
+                                        randSeed: Math.random() * 100,
+                                        randHeight: 0.8 + Math.random() * 0.4,
+                                        randSpeed: 0.9 + Math.random() * 0.2,
+                                        update: function (dt2) {
+                                            this.life -= dt2;
+                                            if (Math.random() < 0.5) {
+                                                const isSmoke = Math.random() < 0.3;
+                                                game.spawnParticles(
+                                                    this.x + (Math.random() - 0.5) * this.radius * 0.4,
+                                                    this.y,
+                                                    1,
+                                                    isSmoke ? '#333333' : (Math.random() < 0.5 ? '#ff4400' : '#ffbb00'),
+                                                    (Math.random() - 0.5) * 12,
+                                                    -60 - Math.random() * 60,
+                                                    { shape: 'circle', shrink: true, size: 6 + Math.random() * 4 }
+                                                );
+                                            }
+                                            game.enemies.forEach(e2 => {
+                                                const ex2 = (e2.x + e2.width / 2) - this.x;
+                                                const ey2 = (e2.y + e2.height / 2) - this.y;
+                                                if (Math.hypot(ex2, ey2) < this.radius) {
+                                                    e2.tempSlow = 0.2;
+                                                    e2.slowMultiplier = this.slow;
+                                                    let tickTimer = this.hitEnemies.get(e2) || 0;
+                                                    tickTimer -= dt2;
+                                                    if (tickTimer <= 0) {
+                                                        const isCrit = false;
+                                                        const finalDamage = this.damage;
+
+                                                        e2.takeDamage(finalDamage, '#ff4400', params.puddleAetherCharge || 0, isCrit);
+
+                                                        // Apply Status
+                                                        if (params.statusEffect && Math.random() < (params.statusChance || 0)) {
+                                                            if (e2.statusManager) {
+                                                                e2.statusManager.applyStatus(params.statusEffect, 5.0);
+                                                            }
+                                                        }
+
+                                                        this.hitEnemies.set(e2, 0.5);
+                                                        game.spawnParticles(e2.x + e2.width / 2, e2.y + e2.height / 2, 2, '#ff4400');
+                                                    } else {
+                                                        this.hitEnemies.set(e2, tickTimer);
+                                                    }
+                                                }
+                                            });
+                                        },
+                                        draw: function (ctx) {
+                                            ctx.save();
+                                            const alpha = Math.min(1, this.life / 0.5);
+                                            ctx.globalAlpha = alpha * 0.8;
+                                            const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+                                            grad.addColorStop(0, '#ff4400');
+                                            grad.addColorStop(1, 'rgba(255, 68, 0, 0)');
+                                            ctx.fillStyle = grad;
+                                            ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
+                                            const surfaceGrad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+                                            surfaceGrad.addColorStop(0, 'rgba(255, 68, 0, 0.8)');
+                                            surfaceGrad.addColorStop(0.6, 'rgba(255, 68, 0, 0.3)');
+                                            surfaceGrad.addColorStop(1, 'rgba(255, 68, 0, 0)');
+                                            ctx.fillStyle = surfaceGrad;
+                                            ctx.beginPath(); ctx.ellipse(this.x, this.y, this.radius, this.radius * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+                                            const t = (this.maxLife - this.life) * 10 * this.randSpeed + this.randSeed;
+                                            const emberCount = 14;
+                                            for (let i = 0; i < emberCount; i++) {
+                                                const offset = (i / emberCount) * Math.PI * 2;
+                                                const progress = (t * 0.15 + offset) % 1.0;
+                                                const spreadX = Math.sin(this.randSeed + i * 2) * (this.radius * 0.25);
+                                                const exP = this.x + spreadX * progress;
+                                                const eyP = this.y - (this.radius * 1.2 * progress * this.randHeight);
+                                                const eSize = (6 + Math.random() * 4) * (1 - progress * 0.7);
+                                                let color;
+                                                if (progress < 0.4) color = i % 3 === 0 ? '#ffffff' : (i % 3 === 1 ? '#ffff00' : '#ff4400');
+                                                else if (progress < 0.7) color = '#662200';
+                                                else color = '#111111';
+                                                ctx.globalAlpha = alpha * (1 - progress);
+                                                ctx.fillStyle = color;
+                                                ctx.beginPath(); ctx.arc(exP, eyP, eSize, 0, Math.PI * 2); ctx.fill();
+                                            }
+                                            const coreGrad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius * 0.5);
+                                            coreGrad.addColorStop(0, '#ffff00'); coreGrad.addColorStop(1, 'rgba(255, 187, 0, 0)');
+                                            ctx.fillStyle = coreGrad;
+                                            ctx.beginPath(); ctx.ellipse(this.x, this.y, this.radius * 0.4, this.radius * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+                                            ctx.restore();
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    });
+                });
+            },
+            draw: function (ctx) {
+                const cx = user.x + user.width / 2;
+                const cy = user.y + user.height / 2;
+                const sprite = params.spriteSheet ? getCachedImage(params.spriteSheet) : null;
+
+                const spawnRatio = Math.min(1.0, (this.age || 0) / 0.5);
+                const despawnRatio = Math.min(1.0, this.life / 0.5);
+                const finalRatio = spawnRatio * despawnRatio;
+
+                const currentOrbit = orbitRadius * finalRatio;
+                const currentCore = coreRadius * finalRatio;
+
+                this.cores.forEach(c => {
+                    const angle = this.angle + c.angleOffset;
+                    const x = cx + Math.cos(angle) * currentOrbit;
+                    const y = cy + Math.sin(angle) * currentOrbit;
+
+                    ctx.save();
+
+                    if (sprite) {
+                        ctx.translate(x, y);
+                        ctx.rotate(this.selfAngle);
+                        ctx.drawImage(sprite, -currentCore, -currentCore, currentCore * 2, currentCore * 2);
+                    } else {
+                        // Fallback to procedural glow
+                        const grad = ctx.createRadialGradient(x, y, 0, x, y, currentCore * 1.5);
+                        grad.addColorStop(0, '#ffbb00');
+                        grad.addColorStop(1, 'rgba(255, 68, 0, 0)');
+                        ctx.fillStyle = grad;
+                        ctx.globalAlpha = 0.6;
+                        ctx.beginPath(); ctx.arc(x, y, currentCore * 1.5, 0, Math.PI * 2); ctx.fill();
+                        ctx.globalAlpha = 1.0;
+                        ctx.fillStyle = '#ffffff';
+                        ctx.beginPath(); ctx.arc(x, y, currentCore * 0.6, 0, Math.PI * 2); ctx.fill();
+                        ctx.strokeStyle = '#ffff00';
+                        ctx.lineWidth = 3;
+                        ctx.beginPath(); ctx.arc(x, y, currentCore * 0.8, 0, Math.PI * 2); ctx.stroke();
+                    }
+                    ctx.restore();
+
+                    if (Math.random() < 0.3) {
+                        game.spawnParticles(x, y, 1, '#ffaa00', 0, 0, { shape: 'circle', shrink: true, size: 4 });
+                    }
+                });
+            }
+        });
+    },
+
+    'volt_drive': (user, game, params) => {
+        // 1. Set Player State
+        user.voltDriveTimer = params.duration || 8;
+        user.voltDriveParams = params;
+
+        // Aether Rush Extension
+        if (user.isAetherRush) {
+            user.voltDriveTimer *= 1.5;
+        }
+
+        // 2. Global Visual Activation (YELLOW)
+        if (game.camera) game.camera.shake(0.3, 10);
+        spawnAetherExplosion(game, user.x + user.width / 2, user.y + user.height / 2, {
+            ringColor: 'rgba(255, 255, 0, 0.7)',
+            particleColor: 'rgba(255, 255, 100, 0.8)'
+        });
+
+        // 3. Range Indicator (Around Player)
+        game.animations.push({
+            type: 'animation',
+            life: user.voltDriveTimer,
+            draw: function (ctx) {
+                if (user.voltDriveTimer <= 0) {
+                    this.life = 0;
+                    return;
+                }
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255, 255, 0, 0.2)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.arc(user.x + user.width / 2, user.y + user.height / 2, params.chainRange || 300, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Pulsing fill
+                const pulse = (Math.sin(Date.now() / 200) + 1) * 0.05;
+                ctx.fillStyle = `rgba(255, 255, 0, ${pulse})`;
+                ctx.fill();
+                ctx.restore();
+            },
+            update: function (dt) {
+                this.life = user.voltDriveTimer;
+            }
+        });
+
+        // 4. Auto-firing Logic Spawner
+        let lightningTimer = 0;
+        game.animations.push({
+            type: 'logic',
+            life: user.voltDriveTimer + 1.0, // Buffer
+            update: function (dt) {
+                if (user.voltDriveTimer <= 0) {
+                    this.life = 0;
+                    return;
+                }
+
+                lightningTimer += dt;
+                const interval = user.isAetherRush ? (params.autoLightningInterval * 0.7) : params.autoLightningInterval;
+                if (lightningTimer >= interval) {
+                    lightningTimer = 0;
+
+                    // Find nearest enemy within range
+                    let nearest = null;
+                    let minDist = Infinity;
+                    const range = params.chainRange || 300;
+
+                    game.enemies.forEach(e => {
+                        if (e.markedForDeletion) return;
+                        const d = Math.hypot(e.x - user.x, e.y - user.y);
+                        if (d < range && d < minDist) {
+                            minDist = d;
+                            nearest = e;
+                        }
+                    });
+
+                    if (nearest) {
+                        // --- Strike Indicator (Telegraph) ---
+                        const tx = nearest.x + nearest.width / 2;
+                        const ty = nearest.y + nearest.height / 2;
+
+                        game.animations.push({
+                            type: 'ring',
+                            x: tx, y: ty,
+                            radius: 40, maxRadius: 10, // Shrinking ring
+                            width: 3,
+                            life: 0.1, maxLife: 0.1,
+                            color: '#ffff00'
+                        });
+
+                        // Small delay for the bolt
+                        setTimeout(() => {
+                            if (nearest.markedForDeletion) return;
+
+                            // Visual Bolt (Sky to Ground like Thunderfall)
+                            spawnLightningBolt(game, tx, ty, {
+                                height: 600,
+                                segments: 60,
+                                deviation: 40,
+                                thickness: 25,
+                                color: '#ffff00',
+                                life: 0.1
+                            });
+
+                            // Impact Effect
+                            spawnThunderfallImpact(game, tx, ty);
+
+                            // Damage Logic
+                            const damage = params.damage || 5;
+                            const isCrit = Math.random() < (params.critChance || 0);
+                            const finalDmg = isCrit ? damage * (params.critMultiplier || 2.0) : damage;
+
+                            nearest.takeDamage(finalDmg, params.damageColor || '#ffff00', 0, isCrit);
+                            spawnLightningBurst(game, nearest.x + nearest.width / 2, nearest.y + nearest.height / 2, {
+                                burstCount: 4, burstSize: 30, burstSpeed: 100
+                            });
+
+                            // --- Multi-jump Chain Logic ---
+                            const baseChain = params.chainCount || 3;
+                            let chainCount = user.isAetherRush ? (baseChain + 2) : baseChain;
+                            let hitIds = new Set([nearest.id]);
+
+                            const triggerJump = (fromEnemy, remaining) => {
+                                if (remaining <= 0) return;
+
+                                let next = null;
+                                let minDist = Infinity;
+                                const fx = fromEnemy.x + fromEnemy.width / 2;
+                                const fy = fromEnemy.y + fromEnemy.height / 2;
+                                const cRange = range * 1.5; // Slightly more forgiving for chains
+
+                                game.enemies.forEach(e => {
+                                    if (e.markedForDeletion || hitIds.has(e.id)) return;
+                                    const ex = e.x + e.width / 2;
+                                    const ey = e.y + e.height / 2;
+                                    const d = Math.hypot(ex - fx, ey - fy);
+                                    if (d < cRange && d < minDist) {
+                                        minDist = d;
+                                        next = e;
+                                    }
+                                });
+
+                                if (next) {
+                                    hitIds.add(next.id);
+
+                                    const nx = next.x + next.width / 2;
+                                    const ny = next.y + next.height / 2;
+
+                                    // Calculate direction and speed for the "contagious" arc
+                                    const angle = Math.atan2(ny - fy, nx - fx);
+                                    const dist = Math.hypot(nx - fx, ny - fy);
+                                    const arcSpeed = 1000; // Slightly slower for better visibility
+                                    const duration = dist / arcSpeed;
+
+                                    // Spawn the moving electricity arc (visual projectile)
+                                    // spriteSheet is necessary for rendering in main.js
+                                    spawnProjectile(game, fx, fy, Math.cos(angle) * arcSpeed, Math.sin(angle) * arcSpeed, {
+                                        visual: true,
+                                        spriteSheet: 'assets/lightning_part_01.png',
+                                        life: duration,
+                                        width: 60,
+                                        height: 20,
+                                        color: '#ffff00',
+                                        crackle: true,
+                                        crackleColor: '#ffff00',
+                                        noTrail: true,
+                                        fixedOrientation: true,
+                                        rotation: angle,
+                                        filter: 'sepia(1) saturate(10) hue-rotate(0deg) brightness(1.2)',
+                                        blendMode: 'lighter'
+                                    });
+
+                                    // Wait for the arc to reach the target before triggering the next step
+                                    setTimeout(() => {
+                                        if (next.markedForDeletion) return;
+
+                                        // Impact Visuals
+                                        spawnLightningBurst(game, nx, ny, {
+                                            burstCount: 4, burstSize: 30, burstSpeed: 100
+                                        });
+
+                                        // Damage Logic
+                                        next.takeDamage(damage * 0.7, '#ffff00', 0);
+
+                                        // Recursive Jump
+                                        triggerJump(next, remaining - 1);
+                                    }, duration * 1000);
+                                }
+                            };
+
+                            if (chainCount > 0) {
+                                triggerJump(nearest, chainCount);
+                            }
+                        }, 60); // End of setTimeout
+                    }
+                }
+            }
+        });
+    },
+};
