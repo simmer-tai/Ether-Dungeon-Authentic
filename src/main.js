@@ -971,17 +971,6 @@ class Game {
                     this.showLoading();
 
                     setTimeout(async () => {
-                        if (this.isDemo && this.currentFloor >= 3) {
-                            // Demo Clear Sequence
-                            this.isPaused = true;
-                            this.gameState = 'DIALOGUE';
-                            this.dialogueText = "デモ版はここまでです。プレイありがとうございました！";
-
-                            setTimeout(() => {
-                                window.location.reload(); // Return to title
-                            }, 3000);
-                            return;
-                        }
                         await this.preloadAllAssets();
                         this.init(true);
                         this.transitionType = 'fade-in';
