@@ -737,6 +737,7 @@ class Game {
     }
 
     spawnFloatingText(text, x, y, color = 'white', options = {}) {
+        const life = options.life || 1.2;
         this.animations.push({
             type: 'text',
             text: text,
@@ -744,10 +745,17 @@ class Game {
             y: y,
             vx: options.vx || (Math.random() - 0.5) * 40,
             vy: options.vy || -120, // Upward drift
-            life: options.life || 1.2,
-            maxLife: options.life || 1.2,
+            life: life,
+            maxLife: life,
             color: color,
-            font: options.font || "bold 20px 'Press Start 2P', monospace"
+            font: options.font || "bold 20px 'Press Start 2P', monospace",
+            update: function (dt) {
+                // Stop rising after 30% of lifetime (suppressing total ascent)
+                if (this.life < this.maxLife * 0.7) {
+                    this.vx = 0;
+                    this.vy = 0;
+                }
+            }
         });
     }
 
