@@ -446,9 +446,15 @@ export function showBlessingSelection(options, onSelectCallback, source = 'defau
         card.appendChild(desc);
 
         // Click Handler
-        card.addEventListener('click', () => {
+        const selectAction = () => {
             hideBlessingSelection();
             if (onSelectCallback) onSelectCallback(opt);
+        };
+
+        card.addEventListener('click', selectAction);
+        card.addEventListener('pointerup', (e) => {
+            e.preventDefault();
+            selectAction();
         });
 
         blessingCardsContainer.appendChild(card);
@@ -487,14 +493,28 @@ export function showAcquiredBlessing(blessing, onConfirmCallback, source = 'bloo
     const card = document.createElement('div');
     card.className = source === 'angel'
         ? 'blessing-card acquired angel-card'
-        : 'blessing-card acquired blood-card'; // Added blood-card
-    card.style.cursor = 'default';
+        : 'blessing-card acquired blood-card';
+    card.style.cursor = 'pointer';
+
+    const confirmAction = () => {
+        if (title) title.textContent = originalTitle;
+        const btnWrapperCurrent = blessingModal.querySelector('.acquire-btn-wrapper');
+        if (btnWrapperCurrent) btnWrapperCurrent.remove();
+        hideBlessingSelection();
+        if (onConfirmCallback) onConfirmCallback();
+    };
+
+    // Card itself is now clickable
+    card.addEventListener('click', confirmAction);
+    card.addEventListener('pointerup', (e) => {
+        e.preventDefault();
+        confirmAction();
+    });
 
     // Name (Now placed OUTSIDE/ABOVE the card)
     const name = document.createElement('div');
     name.className = 'blessing-card-name acquired-title';
     name.textContent = blessing.name;
-    // name.style.color is now handled by .source-X .acquired-title in CSS
     wrapper.appendChild(name);
 
     // Description (Inside card)
@@ -518,13 +538,7 @@ export function showAcquiredBlessing(blessing, onConfirmCallback, source = 'bloo
     btn.className = 'acquire-btn';
     btn.textContent = '獲得';
 
-    const confirmAction = () => {
-        if (title) title.textContent = originalTitle;
-        btnWrapper.remove();
-        hideBlessingSelection();
-        if (onConfirmCallback) onConfirmCallback();
-    };
-
+    // Use the same confirmAction
     btn.addEventListener('click', confirmAction);
     btn.addEventListener('pointerup', (e) => {
         e.preventDefault();
