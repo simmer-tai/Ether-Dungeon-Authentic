@@ -169,6 +169,21 @@ class Game {
             hsValue.textContent = Math.floor(data.stats.highScore || 0);
         }
 
+        // --- DEBUG: Manual Score Submission (Press 'K' on title) ---
+        window.addEventListener('keydown', (e) => {
+            if (this.gameState === 'TITLE' && e.code === 'KeyK') {
+                console.log("[Debug] Manually triggering score submission...");
+                showNicknameInput(async (name) => {
+                    try {
+                        await submitScore(name, 12345); // Unique test score
+                        alert("Score submitted! Check Ranking.");
+                    } catch (err) {
+                        alert("Fetch/Submit failed: " + err.message);
+                    }
+                });
+            }
+        });
+
         this.traps = [];
         this.enemyProjectiles = [];
         this.entities = [];

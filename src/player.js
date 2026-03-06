@@ -326,6 +326,7 @@ export class Player extends Entity {
     }
 
     update(dt) {
+        if (this.game.isPaused) return;
         if (this.invulnerable > 0) this.invulnerable -= dt;
         if (this.slowTimer > 0) this.slowTimer -= dt;
         if (this.enrageTimer > 0) this.enrageTimer -= dt;
