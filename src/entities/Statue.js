@@ -88,7 +88,12 @@ export class Statue extends Entity {
             // Trigger UI
             this.game.gameState = 'REWARD_SELECT';
             ui.showBlessingSelection(options, (selectedOpt) => {
-                this.game.applyReward(selectedOpt);
+                // After selecting from 3, show the final acquisition screen 
+                ui.showAcquiredBlessing(selectedOpt, () => {
+                    this.game.applyReward(selectedOpt);
+                    ui.hideDialogue();
+                    this.game.gameState = 'PLAYING';
+                }, 'angel');
             }, 'angel');
 
             console.log("Statue Interaction: Options showed", options);

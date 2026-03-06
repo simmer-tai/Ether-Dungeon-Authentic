@@ -517,12 +517,20 @@ export function showAcquiredBlessing(blessing, onConfirmCallback, source = 'bloo
     const btn = document.createElement('button');
     btn.className = 'acquire-btn';
     btn.textContent = '獲得';
-    btn.addEventListener('click', () => {
+
+    const confirmAction = () => {
         if (title) title.textContent = originalTitle;
         btnWrapper.remove();
         hideBlessingSelection();
         if (onConfirmCallback) onConfirmCallback();
+    };
+
+    btn.addEventListener('click', confirmAction);
+    btn.addEventListener('pointerup', (e) => {
+        e.preventDefault();
+        confirmAction();
     });
+
     btnWrapper.appendChild(btn);
     container.appendChild(btnWrapper);
 

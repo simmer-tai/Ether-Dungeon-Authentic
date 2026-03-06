@@ -110,9 +110,6 @@ export class BloodAltar extends Entity {
 
         // Apply random blood blessing
         this.grantBlessing();
-        this.game.gameState = 'PLAYING';
-
-        import('../ui.js').then(m => m.hideDialogue());
     }
 
     grantBlessing() {
@@ -125,10 +122,11 @@ export class BloodAltar extends Entity {
 
         const selected = blessings[Math.floor(Math.random() * blessings.length)];
 
-        // Show acquisition UI
+        // Show selection UI (Acquisition screen with "Acquire" button)
+        this.game.gameState = 'REWARD_SELECT';
         import('../ui.js').then(m => {
             m.showAcquiredBlessing(selected, () => {
-                // Add to player's active blessings AFTER confirmation
+                // Add to player's active blessings
                 this.game.player.bloodBlessings = this.game.player.bloodBlessings || [];
                 this.game.player.bloodBlessings.push(selected);
 
@@ -146,11 +144,14 @@ export class BloodAltar extends Entity {
                         vy: -50,
                         life: 2.0,
                         maxLife: 2.0,
-                        color: '#ffd700',
+                        color: '#ff4444',
                         font: 'bold 24px sans-serif'
                     });
                 }
-            });
+
+                m.hideDialogue();
+                this.game.gameState = 'PLAYING';
+            }, 'blood');
         });
     }
 }
