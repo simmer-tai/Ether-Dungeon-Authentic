@@ -77,25 +77,36 @@ class AetherDrone extends Enemy {
             const dx = this.sweepTarget.x - (this.x + this.width / 2);
             const dy = this.sweepTarget.y - (this.y + this.height / 2);
             const dist = Math.hypot(dx, dy);
-            if (dist > 10) {
-                const speed = this.sweepMoveSpeed || 400;
-                this.x += (dx / dist) * speed * dt;
-                this.y += (dy / dist) * speed * dt;
+
+            // Smoother movement using lerp and deceleration
+            if (dist > 2) {
+                const lerpFactor = 5.0 * dt;
+                this.x += dx * Math.min(1.0, lerpFactor);
+                this.y += dy * Math.min(1.0, lerpFactor);
                 this.currentAngleForDraw = Math.atan2(dy, dx);
             } else {
                 this.vx = 0;
                 this.vy = 0;
+                this.state = 'sweep_aim';
+                // Lock initial angle to player
                 if (this.game && this.game.player) {
                     const pdx = this.game.player.x - (this.x + this.width / 2);
                     const pdy = this.game.player.y - (this.y + this.height / 2);
                     this.currentAngleForDraw = Math.atan2(pdy, pdx);
+                    this.sweepLockedAngle = this.currentAngleForDraw;
                 }
             }
+            this.statusManager.update(dt);
+            if (this.flashTimer > 0) this.flashTimer -= dt;
+        } else if (this.state === 'sweep_aim') {
+            // Keep fixed direction
+            this.currentAngleForDraw = this.sweepLockedAngle;
             this.statusManager.update(dt);
             if (this.flashTimer > 0) this.flashTimer -= dt;
         } else if (this.state === 'sweep_beam') {
             this.sweepTimer -= dt;
             const progress = 1.0 - (this.sweepTimer / this.sweepMaxTimer);
+            // Slowly rotate from the locked start angle
             this.currentAngleForDraw = this.sweepStartAngle + (this.sweepAngleRange * progress * this.sweepDirection);
 
             if (this.game && this.game.player) {
@@ -397,9 +408,18 @@ export class AetherPrime extends Boss {
                 this.executeAttack();
             }
         } else {
-            this.attackCooldown -= dt;
-            if (this.attackCooldown <= 0) {
-                this.decideAttack();
+            // Special check for Drone Sweep deployment
+            if (this.currentAttack === 'droneSweep') {
+                const sweepDrones = this.droneEntities.filter(d => d.state === 'sweep_move' || d.state === 'sweep_aim');
+                if (sweepDrones.length > 0 && sweepDrones.every(d => d.state === 'sweep_aim')) {
+                    // All drones reached target, start telegraphing for fire
+                    this.startTelegraph(1.5);
+                }
+            } else {
+                this.attackCooldown -= dt;
+                if (this.attackCooldown <= 0) {
+                    this.decideAttack();
+                }
             }
         }
         this.updateAnimation(dt);
@@ -448,6 +468,7 @@ export class AetherPrime extends Boss {
         } else if (picked === 'syncShot') {
             this.startTelegraph(1.5);
         } else if (picked === 'droneSweep') {
+            // Only trigger movement phase
             this.attackDroneSweep();
         } else {
             this.executeAttack();
@@ -514,7 +535,7 @@ export class AetherPrime extends Boss {
         const shuffled = [...drones].sort(() => 0.5 - Math.random());
         const sweepDrones = shuffled.slice(0, count);
 
-        this.startTelegraph(1.5);
+        // DO NOT start telegraph here anymore. Let drones reach 'sweep_aim' phase first.
         sweepDrones.forEach(d => {
             d.state = 'sweep_move';
             const margin = 60; // Margin from room walls
@@ -553,22 +574,21 @@ export class AetherPrime extends Boss {
     }
 
     executeSweepBeams() {
-        const drones = this.droneEntities.filter(d => d && !d.markedForDeletion && d.state === 'sweep_move');
+        const drones = this.droneEntities.filter(d => d && !d.markedForDeletion && d.state === 'sweep_aim');
         const direction = Math.random() < 0.5 ? 1 : -1;
         const sweepAngle = (60 * Math.PI) / 180;
-        const duration = 1.0;
+        const duration = 2.0; // Slower sweep
 
         drones.forEach(d => {
             d.state = 'sweep_beam';
-            const dx = this.game.player.x + this.game.player.width / 2 - (d.x + d.width / 2);
-            const dy = this.game.player.y + this.game.player.height / 2 - (d.y + d.height / 2);
-            d.sweepStartAngle = Math.atan2(dy, dx);
+            d.sweepStartAngle = d.sweepLockedAngle;
             d.sweepDirection = direction;
             d.sweepTimer = duration;
             d.sweepMaxTimer = duration;
             d.sweepAngleRange = sweepAngle;
         });
         if (this.game.logToScreen) this.game.logToScreen("SWEEP BEAMS ACTIVE!");
+        this.currentAttack = null; // Clear attack state to allow cooldown to start
     }
 
     attackBeam() {
@@ -752,9 +772,9 @@ export class AetherPrime extends Boss {
                     ctx.fill();
 
                     // Drone Sweep Telegraph Line (Red)
-                    if (this.currentAttack === 'droneSweep' && d.state === 'sweep_move') {
-                        ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-                        ctx.fillRect(0, -10, 800, 20);
+                    if (this.currentAttack === 'droneSweep' && (d.state === 'sweep_move' || d.state === 'sweep_aim')) {
+                        ctx.fillStyle = (d.state === 'sweep_aim') ? 'rgba(255, 0, 0, 0.4)' : 'rgba(255, 0, 0, 0.15)';
+                        ctx.fillRect(0, -5, 800, 10); // Thinner telegraph line
                     }
                 }
 
