@@ -169,7 +169,7 @@ export function drawUI(ctx, game, width, height) {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.font = '12px sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText("Last Push: 2026/03/09 18:40 (v1.2.7)", width - 10, height - 10);
+    ctx.fillText("Last Push: 2026/03/09 18:50 (v1.2.8)", width - 10, height - 10);
     ctx.restore();
 
 

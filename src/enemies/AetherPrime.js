@@ -451,29 +451,22 @@ export class AetherPrime extends Boss {
 
         let picked = 'syncShot';
         const r = Math.random();
-        if (this.phase === 1) {
-            if (r < 0.25) picked = 'syncShot';
-            else if (r < 0.55) picked = 'droneRush';
-            else if (r < 0.85) picked = 'droneSweep';
-            else picked = 'beam';
-        } else {
-            if (r < 0.2) picked = 'nova';
-            else if (r < 0.4) picked = 'syncShot';
-            else if (r < 0.7) picked = 'droneRush';
-            else if (r < 0.9) picked = 'droneSweep';
-            else picked = 'beam';
-        }
+
+        // Unified probabilities for both phases (v1.2.8)
+        if (r < 0.40) picked = 'syncShot';
+        else if (r < 0.70) picked = 'beam';
+        else if (r < 0.90) picked = 'droneSweep';
+        else picked = 'droneRush';
 
         this.currentAttack = picked;
         if (picked === 'beam') {
             this.beamTargetAngle = null;
             this.startTelegraph(1.5);
-        } else if (picked === 'nova' || picked === 'droneRush') {
+        } else if (picked === 'droneRush') {
             this.startTelegraph(1.2);
         } else if (picked === 'syncShot') {
             this.startTelegraph(1.5);
         } else if (picked === 'droneSweep') {
-            // Only trigger movement phase
             this.attackDroneSweep();
         } else {
             this.executeAttack();
@@ -484,7 +477,6 @@ export class AetherPrime extends Boss {
         if (this.stunTimer > 0) return;
 
         if (this.currentAttack === 'beam') this.attackBeam();
-        else if (this.currentAttack === 'nova') this.attackNova();
         else if (this.currentAttack === 'syncShot') this.attackSyncShot();
         else if (this.currentAttack === 'droneRush') this.attackDroneRush();
         else if (this.currentAttack === 'droneSweep') this.executeSweepBeams();
