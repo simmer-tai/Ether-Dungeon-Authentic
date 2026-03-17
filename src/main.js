@@ -212,7 +212,7 @@ class Game {
         this.prepareTitleScreenUI();
 
         // Generate a sample dungeon for background
-        this.init(false, 'normal', null);
+        await this.init(false, 'normal', null);
         this.gameState = 'TITLE';
 
         // Setup initial camera cinematic state
@@ -267,7 +267,7 @@ class Game {
 
                     // Re-init for Lobby (Floor 0), reusing existing sample map if appropriate 
                     // but usually better to re-init fresh for lobby.
-                    this.init(false, 'normal', null, true);
+                    await this.init(false, 'normal', null, true);
 
                     // --- Cinematic Trigger (Short flash or zoom if desired) ---
                     this.targetCameraZoom = 1.0; 
@@ -343,10 +343,14 @@ class Game {
         }
     }
 
-    updateLoadingProgress(progress) {
+    updateLoadingProgress(progress, statusText) {
         const fill = document.querySelector('.loading-bar-fill');
         if (fill) {
             fill.style.width = `${progress}%`;
+        }
+        if (statusText) {
+            const textEl = document.querySelector('.loading-text');
+            if (textEl) textEl.textContent = statusText;
         }
     }
 
@@ -488,7 +492,7 @@ class Game {
         console.log("Preloading complete.");
     }
 
-    startGame() {
+    async startGame() {
         const titleScreen = document.getElementById('title-screen');
         if (titleScreen) {
             titleScreen.style.animation = 'fadeOutTitle 0.5s forwards';
@@ -502,13 +506,13 @@ class Game {
 
                 // 2. Initialize Map (Heavy work)
                 // Small delay to ensure the progress bar hit 100% and rendered before blocking
-                setTimeout(() => {
+                setTimeout(async () => {
                     // Show core game UI
                     const uiLayer = document.getElementById('ui-layer');
                     if (uiLayer) uiLayer.style.display = 'block';
 
                     // Initialize game session
-                    this.init();
+                    await this.init();
 
                     this.score = 0; // Reset score
                     this.gameState = 'PLAYING';
@@ -537,9 +541,13 @@ class Game {
         this.score += amount * multiplier;
     }
 
-    init(isNextFloor = false, difficulty = 'normal', startingSkills = null, reuseExisting = false) {
+    async init(isNextFloor = false, difficulty = 'normal', startingSkills = null, reuseExisting = false) {
         this.difficulty = difficulty;
         this.gameState = 'PLAYING';
+
+        const setStatus = (msg) => {
+            this.updateLoadingProgress(100, msg);
+        };
 
         // Reset Camera Targets for Gameplay (allow smooth transition from title/cinematic)
         this.targetCameraOffsetX = 0;
@@ -554,12 +562,12 @@ class Game {
         if (!reuseExisting || !this.map) {
             if (this.currentFloor === 0) {
                 this.map = new Map(40, 40, 40);
-                this.map.generateLobby();
+                await this.map.generateLobby();
                 _debugLog("Lobby Generated");
             } else {
                 // Larger Map: 110x110 tiles
                 this.map = new Map(110, 110, 40);
-                this.map.generate();
+                await this.map.generate(setStatus);
                 _debugLog("Map Generated");
             }
         } else {
@@ -1154,7 +1162,7 @@ class Game {
 
                     setTimeout(async () => {
                         await this.preloadAllAssets();
-                        this.init(true);
+                        await this.init(true);
                         this.transitionType = 'fade-in';
                         this.transitionTimer = 0;
                         this.transitionAlpha = 1;

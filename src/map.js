@@ -43,15 +43,23 @@ export class Map {
         this.minimapDirty = true;
     }
 
-    generate() {
+    async generate(onStatus) {
         let attempts = 0;
         const maxAttempts = 50;
         let success = false;
         let connectivityResult = { success: false, unreachable: [] };
 
+        const yieldNow = () => new Promise(resolve => setTimeout(resolve, 0));
+
         do {
             attempts++;
-            if (attempts > 1) console.log(`Regenerating dungeon (Attempt ${attempts})...`);
+            if (attempts > 1) {
+                console.log(`Regenerating dungeon (Attempt ${attempts})...`);
+                if (onStatus) onStatus(`再生成中... (試行 ${attempts})`);
+            } else {
+                if (onStatus) onStatus("ダンジョン核を初期化中...");
+            }
+            await yieldNow();
 
             this.tiles = [];
             this.roomGrid = [];
@@ -68,6 +76,9 @@ export class Map {
             this.rooms = [];
 
             // 0. Place Central Startup Room (10x10, Center of Map)
+            if (onStatus) onStatus("スタート地点を構築中...");
+            await yieldNow();
+
             const centerX = Math.floor(this.width / 2) - 5;
             const centerY = Math.floor(this.height / 2) - 5;
             const startRoom = {
@@ -87,11 +98,17 @@ export class Map {
             this.placeStartNeighborRooms(startRoom); // Guarantee 4-way corridors + rooms
 
             // 1. Critical Rooms
+            if (onStatus) onStatus("重要区画を配置中...");
+            await yieldNow();
+
             let bossPlaced = this.placer.placeRoom({ w: 20, h: 20, type: 'boss', entranceCount: 1 });
             let staircasePlaced = this.placer.placeRoom({ w: 8, h: 8, type: 'staircase', entranceCount: 1 });
             let shopPlaced = this.placer.placeRoom({ w: 10, h: 10, type: 'shop', entranceCount: 1 });
 
             // 2. Random Rooms
+            if (onStatus) onStatus("エリアを拡張中...");
+            await yieldNow();
+
             const targetRooms = 30;
             const attemptLimit = 400;
             const SHAPES = [
@@ -115,6 +132,8 @@ export class Map {
                     entranceCount: entrances,
                     shape: shape
                 });
+                // Yield occasionally during long room placement
+                if (i % 50 === 0) await yieldNow();
             }
 
             // 3. Special Rooms
@@ -125,24 +144,28 @@ export class Map {
             // Shop already placed in critical phase
 
             // 4. Connectivity
+            if (onStatus) onStatus("通路を連結中...");
+            await yieldNow();
+
             this.connector.connectRooms();
 
             connectivityResult = this.connector.checkConnectivity();
             if (!connectivityResult.success) {
+                if (onStatus) onStatus("回路を修正中...");
+                await yieldNow();
                 this.connector.forceConnectivity(connectivityResult.unreachable);
                 connectivityResult = this.connector.checkConnectivity();
             }
-
-            // 5. Convert dead-end normal rooms into extra treasure rooms
-            // (Removed as per user request to make dead-ends combat rooms)
 
             if (connectivityResult.success && staircasePlaced && shopPlaced) success = true;
 
             if (attempts >= maxAttempts && !success) {
                 console.error("Dungeon generation failed to ensure connectivity or staircase placement.");
-                // Return or handle failure? The loop will exit anyway.
             }
         } while (!success && attempts < maxAttempts);
+
+        if (onStatus) onStatus("生成完了");
+        await yieldNow();
 
         if (!success) {
             console.error("Dungeon generation failed to ensure connectivity after max attempts.");
@@ -247,7 +270,7 @@ export class Map {
         }
     }
 
-    generateTraining() {
+    async generateTraining() {
         this.width = 40;
         this.height = 40;
         this.tiles = [];
@@ -277,12 +300,15 @@ export class Map {
             shape: 'square'
         };
 
+        const yieldNow = () => new Promise(resolve => setTimeout(resolve, 0));
+        await yieldNow();
+
         // Use the placer logic to ensure consistency
         this.placer.carveRoom(room);
         this.rooms.push(room);
     }
 
-    generateTitleBackground() {
+    async generateTitleBackground() {
         this.width = 30;
         this.height = 25;
         this.tiles = [];
@@ -307,11 +333,15 @@ export class Map {
             connectors: [],
             shape: 'square'
         };
+
+        const yieldNow = () => new Promise(resolve => setTimeout(resolve, 0));
+        await yieldNow();
+
         this.placer.carveRoom(room);
         this.rooms.push(room);
     }
 
-    generateLobby() {
+    async generateLobby() {
         this.width = 40;
         this.height = 40;
         this.tiles = [];
@@ -327,6 +357,9 @@ export class Map {
             }
         }
         this.rooms = [];
+
+        const yieldNow = () => new Promise(resolve => setTimeout(resolve, 0));
+        await yieldNow();
 
         // 1. Create Start Room
         const startRoom = {
